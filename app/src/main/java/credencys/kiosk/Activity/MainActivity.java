@@ -1,5 +1,6 @@
 package credencys.kiosk.Activity;
 
+import android.annotation.TargetApi;
 import android.app.ActivityManager;
 import android.app.Dialog;
 import android.content.ComponentName;
@@ -11,9 +12,11 @@ import android.media.AudioManager;
 import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.telephony.CellInfoGsm;
 import android.telephony.CellSignalStrengthGsm;
 import android.telephony.PhoneStateListener;
@@ -65,6 +68,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener {
     private TelephonyManager telephonyManager;
 
     private HomeKeyLocker homeKeyLocker;
+    private FloatingViewService floatingViewService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,6 +77,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_main);
         homeKeyLocker = new HomeKeyLocker();
+        floatingViewService = new FloatingViewService();
 
         myPhoneStateListener = new MyPhoneStateListener();
         telephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
@@ -90,15 +95,6 @@ public class MainActivity extends BaseActivity implements View.OnClickListener {
 //            makePrefered();
 //        }
 //        Toast.makeText(this, "Please select this application as default launcher", Toast.LENGTH_LONG).show();
-        ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
-        ActivityManager.RunningTaskInfo foregroundTaskInfo = manager.getRunningTasks(1).get(0);
-        String foregroundTaskPackageName = foregroundTaskInfo.topActivity.getPackageName();
-
-/*        if (!foregroundTaskPackageName.contains("com.mapfactor.navigator")){
-            stopService(new Intent(getApplicationContext(), FloatingViewService.class));
-        }else if (foregroundTaskPackageName.equalsIgnoreCase("com.diplomat.cabdroid")){
-            stopService(new Intent(getApplicationContext(), FloatingViewService.class));
-        }*/
     }
 
     @Override
@@ -226,10 +222,20 @@ public class MainActivity extends BaseActivity implements View.OnClickListener {
                 break;
             case R.id.btnMap:
                 try {
-                    startService(new Intent(getApplicationContext(), FloatingViewService.class));
-                    Intent LaunchIntent = getPackageManager().getLaunchIntentForPackage("com.mapfactor.navigator");
-                    startActivity(LaunchIntent);
+                    ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+                    ActivityManager.RunningTaskInfo foregroundTaskInfo = manager.getRunningTasks(1).get(0);
+                    String foregroundTaskPackageName = foregroundTaskInfo.topActivity.getPackageName();
 
+                    Intent LaunchIntent = getPackageManager().getLaunchIntentForPackage(Constant.LAUNCH_NAVIGATOR);
+                    startActivity(LaunchIntent);
+                    if (isMyServiceRunning(FloatingViewService.class) && foregroundTaskPackageName.contains(Constant.LAUNCH_NAVIGATOR)){
+
+                        startService(new Intent(getApplicationContext(), FloatingViewService.class));
+                        floatingViewService.anableFAB();
+                    }else {
+
+                        startService(new Intent(getApplicationContext(), FloatingViewService.class));
+                    }
 
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -242,28 +248,28 @@ public class MainActivity extends BaseActivity implements View.OnClickListener {
 //                }
                 break;
             case R.id.btnApp:
-
-//                Intent intentApp = new Intent(this, AppListingActivity.class);
-//                startActivity(intentApp);
-                ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
-                ActivityManager.RunningTaskInfo foregroundTaskInfo = manager.getRunningTasks(1).get(0);
-                String foregroundTaskPackageName = foregroundTaskInfo.topActivity.getPackageName();
-
-                if (!foregroundTaskPackageName.contains("com.mapfactor.navigator")){
-                    stopService(new Intent(getApplicationContext(), FloatingViewService.class));
-                }else if (foregroundTaskPackageName.equalsIgnoreCase("com.diplomat.cabdroid")){
-                    stopService(new Intent(getApplicationContext(), FloatingViewService.class));
-                }
                 try {
-                    Intent LaunchIntent = getPackageManager().getLaunchIntentForPackage("com.diplomat.cabdroid");
+                    ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+                    ActivityManager.RunningTaskInfo foregroundTaskInfo = manager.getRunningTasks(1).get(0);
+                    String foregroundTaskPackageName = foregroundTaskInfo.topActivity.getPackageName();
+
+                    Intent LaunchIntent = getPackageManager().getLaunchIntentForPackage(Constant.LAUNCH_KUBER);
                     startActivity(LaunchIntent);
+
+                    if (isMyServiceRunning(FloatingViewService.class)  && foregroundTaskPackageName.contains(Constant.LAUNCH_KUBER)){
+                        startService(new Intent(getApplicationContext(), FloatingViewService.class));
+                        floatingViewService.anableFAB();
+                    }else {
+                        startService(new Intent(getApplicationContext(), FloatingViewService.class));
+                    }
+
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
                 break;
             case R.id.btnMusic:
-//                Intent intentMusic = new Intent("android.intent.action.MUSIC_PLAYER");
-//                startActivity(intentMusic);
+/*                Intent intentMusic = new Intent("android.intent.action.MUSIC_PLAYER");
+                startActivity(intentMusic);*/
                 break;
             case R.id.btnSetting:
                 Intent intentSetting = new Intent(this, SettingActivity.class);
@@ -273,6 +279,38 @@ public class MainActivity extends BaseActivity implements View.OnClickListener {
             default:
                 break;
         }
+    }
+
+    /*
+    * This method check if a certain service is running or not:
+    * It will be used to check if the FloatingViewService is running to help toggle the state of the floating button
+    * */
+    private boolean isMyServiceRunning(Class<?> serviceClass) {
+        ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+            if (serviceClass.getName().equals(service.service.getClassName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /*
+    * This method checks as to which task is in the foreground:
+    * It returns the id of the view of the foreGroundTask
+    * */
+    public int getIdOfForeGroundTask(){
+        ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        ActivityManager.RunningTaskInfo foregroundTaskInfo = manager.getRunningTasks(1).get(0);
+        String foregroundTaskPackageName = foregroundTaskInfo.topActivity.getPackageName();
+
+        if (foregroundTaskPackageName.contains(Constant.LAUNCH_NAVIGATOR)){
+            return R.id.btnMap;
+        }else if (foregroundTaskPackageName.contains(Constant.LAUNCH_KUBER)){
+            return R.id.btnApp;
+        }
+        return 0;
+
     }
 
     private File createImageFile() throws IOException {
@@ -375,6 +413,7 @@ public class MainActivity extends BaseActivity implements View.OnClickListener {
         }
     }
 
+    @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR1)
     private String checkSignal() {
         ConnectivityManager manager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         String str = null;
