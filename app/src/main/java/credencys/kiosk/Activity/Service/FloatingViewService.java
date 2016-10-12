@@ -18,6 +18,7 @@ import android.widget.Toast;
 
 import com.credencys.kiosk.R;
 
+import credencys.kiosk.Activity.MainActivity;
 import credencys.kiosk.Activity.Util.Constant;
 
 public class FloatingViewService extends Service {
@@ -25,9 +26,9 @@ public class FloatingViewService extends Service {
     private WindowManager windowManager;
     private boolean mIsFloatingViewAttached = false;
     private ImageButton imageButton;
-
-    public FloatingViewService() {
-    }
+    public boolean FAB_ANABLED;
+    private int btnViewID;
+    private MainActivity mainActivity;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -48,10 +49,6 @@ public class FloatingViewService extends Service {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
         imageButton = new ImageButton(this);
-        imageButton.setImageResource(R.mipmap.ic_back_to_kuber);
-        //imageButton.setBackground(R.drawable.back_to_kuber);
-        imageButton.setBackgroundColor(R.drawable.back_to_kuber);
-
 
         final WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -63,44 +60,91 @@ public class FloatingViewService extends Service {
 
         params.gravity = Gravity.CENTER|Gravity.RIGHT;
 
-        windowManager.addView(imageButton, params);
+        /*
+        * Toggle the FAB between Kuber and the Navigator
+        * */
+        ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        ActivityManager.RunningTaskInfo foregroundTaskInfo = manager.getRunningTasks(1).get(0);
+        final String foregroundTaskPackageName = foregroundTaskInfo.topActivity.getPackageName();
 
-        imageButton.setOnTouchListener(new View.OnTouchListener() {
+        int id = 0;
+        if (foregroundTaskPackageName.contains(Constant.LAUNCH_NAVIGATOR)){
+            id = R.id.btnMap;
+            imageButton.setImageResource(R.mipmap.ic_back_to_kuber);
+            imageButton.setBackgroundColor(R.drawable.back_to_kuber);
 
-            @Override
-            public boolean onTouch(View view, MotionEvent motionEvent) {
-                switch (motionEvent.getAction()){
-                    case MotionEvent.ACTION_DOWN:
-                     {
-                        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                            Intent LaunchIntent = getPackageManager().getLaunchIntentForPackage(Constant.LAUNCH_KUBER);
-                            startActivity(LaunchIntent);
-                            /*String defaultApplication = Settings.Secure.getString(getContentResolver(), Constant.LAUNCH_KUBER);
-                            PackageManager pm = getPackageManager();
-                            Intent intent = pm.getLaunchIntentForPackage(defaultApplication );
-                            if (intent != null) {
-                                startActivity(intent);
-                            }*/
-                        } else {
-                            Intent LaunchIntent = getPackageManager().getLaunchIntentForPackage(Constant.LAUNCH_KUBER);
-                            startActivity(LaunchIntent);
-                            /*String defaultApplication = Settings.Secure.getString(getContentResolver(), Constant.LAUNCH_KUBER);
-                            PackageManager pm = getPackageManager();
-                            Intent intent = pm.getLaunchIntentForPackage(defaultApplication );
-                            if (intent != null) {
-                                startActivity(intent);
-                            }*/
-                            /*Intent intent = new Intent(Intent.ACTION_MAIN);
-                            intent.addCategory(Intent.CATEGORY_DEFAULT);
-                            intent.setType(Constant.LAUNCH_KUBER);
-                            startActivity(intent);*/
+            windowManager.addView(imageButton, params);
+
+            imageButton.setOnTouchListener(new View.OnTouchListener() {
+
+                @Override
+                public boolean onTouch(View view, MotionEvent motionEvent) {
+                    switch (motionEvent.getAction()){
+                        case MotionEvent.ACTION_DOWN:
+                        {
+                            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                                Intent LaunchIntent = getPackageManager().getLaunchIntentForPackage(Constant.LAUNCH_KUBER);
+                                startActivity(LaunchIntent);
+
+                                ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+                                ActivityManager.RunningTaskInfo foregroundTaskInfo = manager.getRunningTasks(1).get(0);
+                                final String foregroundTaskPackageName = foregroundTaskInfo.topActivity.getPackageName();
+
+                                if (!foregroundTaskPackageName.contains("com.mapfactor.navigator")){
+                                    disableFAB();
+                                }
+                                toggleFAB();
+
+                            } else {
+                                Intent LaunchIntent = getPackageManager().getLaunchIntentForPackage(Constant.LAUNCH_KUBER);
+                                startActivity(LaunchIntent);
+                            }
                         }
+                        return true;
                     }
-                    return true;
+                    return false;
                 }
-                return false;
-            }
-        });
+            });
+        }
+        else if (foregroundTaskPackageName.contains(Constant.LAUNCH_KUBER)){
+            id = R.id.btnApp;
+            imageButton.setImageResource(R.mipmap.ic_back_to_navigator);
+            imageButton.setBackgroundColor(R.drawable.back_to_kuber);
+
+            windowManager.addView(imageButton, params);
+
+            imageButton.setOnTouchListener(new View.OnTouchListener() {
+
+                @Override
+                public boolean onTouch(View view, MotionEvent motionEvent) {
+                    switch (motionEvent.getAction()){
+                        case MotionEvent.ACTION_DOWN:
+                        {
+                            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                                Intent LaunchIntent = getPackageManager().getLaunchIntentForPackage(Constant.LAUNCH_NAVIGATOR);
+                                startActivity(LaunchIntent);
+
+                                ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+                                ActivityManager.RunningTaskInfo foregroundTaskInfo = manager.getRunningTasks(1).get(0);
+                                final String foregroundTaskPackageName = foregroundTaskInfo.topActivity.getPackageName();
+
+                                if (!foregroundTaskPackageName.contains(Constant.LAUNCH_NAVIGATOR) &&
+                                        foregroundTaskInfo.equals(MainActivity.class)){
+                                    disableFAB();
+                                }
+                                toggleFAB();
+
+                            } else {
+                                Intent LaunchIntent = getPackageManager().getLaunchIntentForPackage(Constant.LAUNCH_KUBER);
+                                startActivity(LaunchIntent);
+                            }
+                        }
+                        return true;
+                    }
+                    return false;
+                }
+            });
+        }
 
         mIsFloatingViewAttached = true;
 
@@ -121,5 +165,72 @@ public class FloatingViewService extends Service {
         removeView();
     }
 
+    public void disableFAB(){
+        imageButton.setVisibility(View.GONE);
+        FAB_ANABLED = false;
+    }
 
+    public void anableFAB(){
+
+        if (imageButton.isEnabled()){
+            imageButton.setVisibility(View.VISIBLE);
+        }
+
+        FAB_ANABLED = true;
+    }
+
+    public void toggleFAB(){
+
+        ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        ActivityManager.RunningTaskInfo foregroundTaskInfo = manager.getRunningTasks(1).get(0);
+        final String foregroundTaskPackageName = foregroundTaskInfo.topActivity.getPackageName();
+        if(foregroundTaskPackageName.contains(Constant.LAUNCH_KUBER) || foregroundTaskPackageName.contains(Constant.LAUNCH_NAVIGATOR)){
+
+            if (foregroundTaskPackageName.contains(Constant.LAUNCH_KUBER)){
+                imageButton.setImageResource(R.mipmap.ic_back_to_navigator);
+                imageButton.setVisibility(View.VISIBLE);
+
+                imageButton.setOnTouchListener(new View.OnTouchListener() {
+                    @Override
+                    public boolean onTouch(View view, MotionEvent motionEvent) {
+                        switch (motionEvent.getAction()){
+                            case MotionEvent.ACTION_DOWN:
+                                Intent LaunchIntent = getPackageManager().getLaunchIntentForPackage(Constant.LAUNCH_NAVIGATOR);
+                                startActivity(LaunchIntent);
+
+                                if (foregroundTaskPackageName.contains(Constant.LAUNCH_NAVIGATOR)){
+                                    disableFAB();
+                                    imageButton.setVisibility(View.GONE);
+                                }
+                                toggleFAB();
+                        }
+                        return false;
+                    }
+                });
+
+
+            }else if (foregroundTaskPackageName.contains(Constant.LAUNCH_NAVIGATOR)){
+                imageButton.setImageResource(R.mipmap.ic_back_to_kuber);
+                imageButton.setVisibility(View.VISIBLE);
+
+                imageButton.setOnTouchListener(new View.OnTouchListener() {
+                    @Override
+                    public boolean onTouch(View view, MotionEvent motionEvent) {
+                        switch (motionEvent.getAction()){
+                            case MotionEvent.ACTION_DOWN:
+                                Intent LaunchIntent = getPackageManager().getLaunchIntentForPackage(Constant.LAUNCH_KUBER);
+                                startActivity(LaunchIntent);
+
+                                if (foregroundTaskPackageName.contains(Constant.LAUNCH_KUBER)){
+                                    disableFAB();
+                                    imageButton.setVisibility(View.GONE);
+                                }
+                                toggleFAB();
+                        }
+                        return false;
+                    }
+                });
+            }
+        }
+    }
 }
